@@ -2,26 +2,35 @@ mod config;
 mod eth_adapter;
 mod indexer;
 
+use alloy::primitives::Address;
+use alloy::providers::Provider;
+use alloy::rpc::types::Filter;
+use alloy::sol;
 use config::Config;
 use dotenv::dotenv;
 use envconfig::Envconfig;
 use eth_adapter::EthAdapter;
 use indexer::Indexer;
-use std::env;
 use std::error::Error;
 use std::str::FromStr;
-use std::{fs::File, future};
-use web3::ethabi::{LogParam, ParseLog, RawLog};
-use web3::signing::keccak256;
-use web3::types::{Transaction, TransactionReceipt, H160, H256};
-use web3::{futures::StreamExt, types::FilterBuilder};
+use std::{fs::File};
+use futures_util::stream::StreamExt;
+
+// Codegen from ABI file to interact with the contract.
 
 const CONTRACT_ADDRESS_USDT: &str = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
+sol!(
+    #[allow(missing_docs)]
+    #[sol(rpc)]
+    USDT_CONTRACT,
+    "./abi.json"
+);
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     //
     dotenv()?;
     let config = Config::init_from_env()?;
+
     // Open the ABI file safely
     let abi_file = File::open("./abi.json")?;
     // Initialize the Indexer
@@ -33,54 +42,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
         abi_file,
     )?;
 
-    let eth_adapter = EthAdapter::new(config.rpc_url_websocket).await?;
-    //println!("Indexer: {:?} {:?}", indexer, eth_adapter);
+    let eth_adapter = EthAdapter::new(config.rpc_url_websocket).await.unwrap();
 
-    let event_signature = "Transfer(address,address,uint256)";
-    let filter = FilterBuilder::default()
-        .address(vec![CONTRACT_ADDRESS_USDT.parse().unwrap()])
-        .topics(
-            Some(vec![H256::from_slice(&keccak256(
-                event_signature.as_bytes(),
-            ))]),
-            None,
-            None,
-            None,
-        )
-        .build();
+    let event_signature_string = "Transfer(address,address,uint256)";
 
-    let mut sub = eth_adapter
-        .web3
-        .eth_subscribe()
-        .subscribe_logs(filter.to_owned())
-        .await?;
+    let filter = Filter::new()
+        .address(Address::from_str(CONTRACT_ADDRESS_USDT)?)
+        .event(event_signature_string);
 
-    println!("Got subscription id: {:?}", sub.id());
+    let subscription = eth_adapter.provider.subscribe_logs(&filter).await?;
+    let mut stream = subscription.into_stream();
+    let log = stream.next().await.unwrap();
+    let event_object = log.log_decode::<USDT_CONTRACT::Transfer>()?.inner.data;
+    println!(
+        "{:?} --> {:?} Amt: {:?}",
+        &event_object.from, &event_object.to, &event_object.value
+    );
 
-    (&mut sub)
-    .take(1) // Remove to keep running
-    .for_each(|log| {
-        let eth_adapter: EthAdapter = eth_adapter.clone();
-        async move {
-            if let Ok(event_data) = log {
-                println!("Got: {:?}", event_data.transaction_hash);
-                if let Some(tx_hash) = event_data.transaction_hash {
-                    match eth_adapter.web3.eth().transaction_receipt(tx_hash).await {
-                        Ok(Some(tx_receipt)) => println!("Transaction Receipt {:?}", tx_receipt.logs.iter().for_each(|log| {
-                            if log.address == H160::from_str(CONTRACT_ADDRESS_USDT).unwrap() {
-                                println!("This is the relevant log {:?}", log);
-                            }
-                        })),
-                        Ok(None) => println!("Transaction receipt not found"),
-                        Err(err) => eprintln!("Error fetching transaction receipt: {:?}", err),
-                    }
-                }
-            }
-        }
-    })
-    .await;
-
-    sub.unsubscribe().await?;
-    println!("Filter was {:?}", filter);
     Ok(())
 }

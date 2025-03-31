@@ -1,18 +1,33 @@
-use std::error::Error;
-use web3::{
-    Web3,
-    transports::{self, WebSocket},
+use alloy::providers::{
+    Identity, ProviderBuilder, RootProvider, WsConnect,
+    fillers::{BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller},
 };
+use std::error::Error;
 
 #[derive(Debug, Clone)]
 pub struct EthAdapter {
-    pub web3: Web3<WebSocket>,
+    pub provider: FillProvider<
+        JoinFill<
+            Identity,
+            JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+        >,
+        RootProvider,
+    >,
 }
 
 impl EthAdapter {
     pub async fn new(rpc_url: String) -> Result<Self, Box<dyn Error>> {
-        let transport = transports::WebSocket::new(&rpc_url).await?;
-        let web3 = web3::Web3::new(transport);
-        Ok(EthAdapter { web3 })
+        let websocket_provider = ProviderBuilder::new()
+            .on_ws(WsConnect {
+                url: rpc_url.clone(),
+                auth: None,
+                config: None,
+            })
+            .await
+            .unwrap();
+
+        Ok(EthAdapter {
+            provider: websocket_provider,
+        })
     }
 }
