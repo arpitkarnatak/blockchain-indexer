@@ -69,32 +69,32 @@ impl Indexer {
                 .from_block(BlockNumber::from(start_block as u64))
                 .to_block(BlockNumber::from(end_block as u64))
                 .event(&self.event_signature);
+            println!("From blocks {} to {}", start_block, end_block);
 
             let logs = http_provider.get_logs(&filter).await;
             match logs {
                 Ok(logs) => {
                     logs.iter().for_each(|log| {
-                        println!("======= Log incoming ==========");
+                        println!("[HTTP] ======= Log incoming ==========");
                         let event_object = log
                             .log_decode::<USDT_CONTRACT::Transfer>()
                             .unwrap()
                             .inner
                             .data;
                         println!(
-                            "{:?} ---> {:?} [{:?}]",
+                            "[HTTP] {:?} ---> {:?} [{:?}]",
                             event_object.from, event_object.to, event_object.value
                         );
                     });
                     jump *= 2;
+                    start_block = end_block;
+                    end_block = end_block + jump;
                 }
                 Err(err) => {
                     eprintln!("Error {}", err);
                     jump = 1;
                 }
             }
-            start_block = end_block;
-            end_block = end_block + jump;
-            println!("From blocks {} to {}", start_block, end_block);
         }
         Ok(())
     }
@@ -118,7 +118,7 @@ impl Indexer {
         let log = stream.next().await.unwrap();
         let event_object = log.log_decode::<USDT_CONTRACT::Transfer>()?.inner.data;
         println!(
-            "{:?} --> {:?} Amt: {:?}",
+            "[WS] {:?} --> {:?} Amt: {:?}",
             &event_object.from, &event_object.to, &event_object.value
         );
         Ok(())

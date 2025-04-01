@@ -29,12 +29,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let indexer = Indexer::new(
         CONTRACT_ADDRESS_USDT, // USDT Address
-        4634748,
-        4634748,
+        22169475,
+        22169477,
         "Transfer".to_owned(),
         "Transfer(address,address,uint256)".to_owned(),
         abi_file,
     )?;
+
     indexer.backfill_database().await?;
     indexer.event_parser().await?;
     Ok(())
