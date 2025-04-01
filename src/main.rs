@@ -1,11 +1,13 @@
 mod config;
 mod indexer;
+mod message_queue;
 
 use alloy::sol;
 use config::Config;
 use dotenv::dotenv;
 use envconfig::Envconfig;
 use indexer::Indexer;
+use message_queue::MessageQueue;
 use std::error::Error;
 use std::fs::File;
 
@@ -15,6 +17,7 @@ const CONTRACT_ADDRESS_USDT: &str = "0xdAC17F958D2ee523a2206206994597C13D831ec7"
 sol!(
     #[allow(missing_docs)]
     #[sol(rpc)]
+    #[derive(Debug, serde::Serialize)]
     USDT_CONTRACT,
     "./abi.json"
 );
@@ -36,7 +39,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         abi_file,
     )?;
 
-    indexer.backfill_database().await?;
+    //indexer.backfill_database().await?;
     indexer.event_parser().await?;
     Ok(())
 }

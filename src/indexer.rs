@@ -1,16 +1,18 @@
+use alloy::hex::serde;
 use alloy::primitives::{Address, BlockNumber};
 use alloy::providers::{Provider, WsConnect};
 use alloy::rpc::types::Filter;
 use alloy::{providers::ProviderBuilder, transports::http::reqwest::Url};
 use envconfig::Envconfig;
 use futures_util::StreamExt;
-use serde_json::Value as JSONValue; // Ensure serde_json is used
+use serde_json::Value as JSONValue;
 use std::error::Error;
 use std::fs::File;
 use std::io::Read;
 use std::str::FromStr;
 
 use crate::config::{self, Config};
+use crate::message_queue::MessageQueue;
 use crate::{CONTRACT_ADDRESS_USDT, USDT_CONTRACT};
 
 #[derive(Debug)] // Implement Debug to print Indexer
@@ -82,8 +84,8 @@ impl Indexer {
                             .inner
                             .data;
                         println!(
-                            "[HTTP] {:?} ---> {:?} [{:?}]",
-                            event_object.from, event_object.to, event_object.value
+                            "[HTTP] {:?}",
+                            &event_object
                         );
                     });
                     jump *= 2;
@@ -109,6 +111,9 @@ impl Indexer {
             })
             .await
             .unwrap();
+
+        let eth_queue = MessageQueue::new("eth_events").await?;
+
         let filter = Filter::new()
             .address(Address::from_str(CONTRACT_ADDRESS_USDT)?)
             .event(&self.event_signature);
@@ -117,10 +122,10 @@ impl Indexer {
         let mut stream = subscription.into_stream();
         let log = stream.next().await.unwrap();
         let event_object = log.log_decode::<USDT_CONTRACT::Transfer>()?.inner.data;
-        println!(
-            "[WS] {:?} --> {:?} Amt: {:?}",
-            &event_object.from, &event_object.to, &event_object.value
-        );
+        println!("[WS] {:?}", &event_object);
+        eth_queue
+            .publish_message(&serde_json::to_string(&serde_json::json!(event_object)).unwrap())
+            .await?;
         Ok(())
     }
 }
