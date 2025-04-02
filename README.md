@@ -1,5 +1,12 @@
 # Blockchain Indexer
 
+## Demo
+
+
+https://github.com/user-attachments/assets/1f390a5a-2d8e-4960-8f3f-6cf47ffc4705
+
+
+
 ## Plan of action
 <img width="1263" alt="Screenshot 2025-04-02 at 11 05 17 PM" src="https://github.com/user-attachments/assets/6c19acc2-920a-4a28-8766-a1cab4533ec9" />
 (the blue boxes consist of properties that can be edited to make it ready for your usecase)
