@@ -1,11 +1,22 @@
+use core::str;
+use futures_util::StreamExt;
 use lapin::{
     BasicProperties, Channel, Connection, ConnectionProperties, options::*, types::FieldTable,
 };
-use std::{error::Error, process::exit};
+use serde::{Deserialize, Serialize};
+use serde_json;
+use std::error::Error;
 
 pub struct MessageQueue {
     channel: Channel,
     queue_name: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct TempEventObject {
+    from: String,
+    to: String,
+    value: String,
 }
 
 impl MessageQueue {
@@ -59,6 +70,26 @@ impl MessageQueue {
             .await?;
 
         println!("Message published to {}: {}", self.queue_name, message);
+        Ok(())
+    }
+
+    pub async fn consume_message(&self) -> Result<(), Box<dyn Error>> {
+        let mut message_consumer = self
+            .channel
+            .basic_consume(
+                &self.queue_name,
+                "tag-eth-event",
+                BasicConsumeOptions::default(),
+                FieldTable::default(),
+            )
+            .await?;
+        while let Some(Ok(message)) = &message_consumer.next().await {
+            let mut event_object = serde_json::from_str::<TempEventObject>(
+                String::from_utf8(message.data.clone())?.as_str(),
+            )?;
+            println!("Received event object {:?}", &event_object);
+            message.ack(BasicAckOptions::default()).await?;
+        }
         Ok(())
     }
 }

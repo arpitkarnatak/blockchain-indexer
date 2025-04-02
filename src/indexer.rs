@@ -2,6 +2,7 @@ use alloy::hex::serde;
 use alloy::primitives::{Address, BlockNumber};
 use alloy::providers::{Provider, WsConnect};
 use alloy::rpc::types::Filter;
+use alloy::sol;
 use alloy::{providers::ProviderBuilder, transports::http::reqwest::Url};
 use envconfig::Envconfig;
 use futures_util::StreamExt;
@@ -83,10 +84,7 @@ impl Indexer {
                             .unwrap()
                             .inner
                             .data;
-                        println!(
-                            "[HTTP] {:?}",
-                            &event_object
-                        );
+                        println!("[HTTP] {:?}", &event_object);
                     });
                     jump *= 2;
                     start_block = end_block;
@@ -120,12 +118,15 @@ impl Indexer {
 
         let subscription = provider.subscribe_logs(&filter).await?;
         let mut stream = subscription.into_stream();
-        let log = stream.next().await.unwrap();
-        let event_object = log.log_decode::<USDT_CONTRACT::Transfer>()?.inner.data;
-        println!("[WS] {:?}", &event_object);
-        eth_queue
-            .publish_message(&serde_json::to_string(&serde_json::json!(event_object)).unwrap())
-            .await?;
+
+        while let Some(log) = stream.next().await {
+            let event_object = log.log_decode::<USDT_CONTRACT::Transfer>()?.inner.data;
+            println!("[WS] {:?}", &event_object);
+            eth_queue
+                .publish_message(&serde_json::to_string(&serde_json::json!(event_object)).unwrap())
+                .await?;
+        }
+
         Ok(())
     }
 }
