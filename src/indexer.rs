@@ -1,8 +1,6 @@
-use alloy::hex::serde;
 use alloy::primitives::{Address, BlockNumber};
 use alloy::providers::{Provider, WsConnect};
 use alloy::rpc::types::Filter;
-use alloy::sol;
 use alloy::{providers::ProviderBuilder, transports::http::reqwest::Url};
 use envconfig::Envconfig;
 use futures_util::StreamExt;
@@ -118,7 +116,6 @@ impl Indexer {
 
         let subscription = provider.subscribe_logs(&filter).await?;
         let mut stream = subscription.into_stream();
-
         while let Some(log) = stream.next().await {
             let event_object = log.log_decode::<USDT_CONTRACT::Transfer>()?.inner.data;
             println!("[WS] {:?} {:?}", &event_object, &log);
