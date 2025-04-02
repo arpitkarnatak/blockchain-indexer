@@ -6,7 +6,7 @@ use alloy::sol;
 use alloy::{providers::ProviderBuilder, transports::http::reqwest::Url};
 use envconfig::Envconfig;
 use futures_util::StreamExt;
-use serde_json::Value as JSONValue;
+use serde_json::{Value as JSONValue, json};
 use std::error::Error;
 use std::fs::File;
 use std::io::Read;
@@ -121,12 +121,23 @@ impl Indexer {
 
         while let Some(log) = stream.next().await {
             let event_object = log.log_decode::<USDT_CONTRACT::Transfer>()?.inner.data;
-            println!("[WS] {:?}", &event_object);
+            println!("[WS] {:?} {:?}", &event_object, &log);
+        
+            let mut event_log = serde_json::json!(log); // Remove & to make it mutable
+        
+            if let JSONValue::Object(ref mut map) = event_log {
+                map.remove("inner"); // Omitting "inner"
+                map.remove("data"); // Omitting "data"
+                map.remove("topics");
+                map.insert("event_data".to_string(), serde_json::json!(event_object));
+            }
             eth_queue
-                .publish_message(&serde_json::to_string(&serde_json::json!(event_object)).unwrap())
+                .publish_message(&serde_json::to_string(&event_log).unwrap())
                 .await?;
         }
 
         Ok(())
     }
 }
+
+// { inner: Log { address: 0xdac17f958d2ee523a2206206994597c13d831ec7, data: LogData { topics: [0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef, 0x000000000000000000000000ae8a453eb0d22c098cf938429a3abda6d6546411, 0x000000000000000000000000a82559ee217eb35839790275bfb034f5a2885c58], data: 0x000000000000000000000000000000000000000000000000000000012db23120 } }, block_hash: Some(0xfb6de7f4729adca281f508972fb2e5418ec92eeb94e336620cb61c13d93766f9), block_number: Some(22179665), block_timestamp: None, transaction_hash: Some(0x9e9e1bd436776c160ac100363915759f50cafcf132f24792bf3118cc42faed05), transaction_index: Some(125), log_index: Some(754), removed: false
