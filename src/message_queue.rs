@@ -1,3 +1,4 @@
+use crate::config::CONFIG;
 use core::str;
 use futures_util::StreamExt;
 use lapin::{
@@ -22,15 +23,10 @@ pub struct TempEventObject {
 impl MessageQueue {
     // Create a queue object, establish a connection to RabbitMQ
     pub async fn new(queue_name: &str) -> Result<Self, Box<dyn Error>> {
-        let connection = Connection::connect(
-            "amqp://rabbitmq:rabbitmq@localhost:5672/%2F",
-            ConnectionProperties::default(),
-        )
-        .await
-        .map_err(|e| {
-            // Optionally log or transform the error
-            Box::<dyn Error>::from(format!("Failed to create RabbitMQ connection: {}", e))
-        })?;
+        let connection =
+            Connection::connect(&CONFIG.message_queue_url, ConnectionProperties::default())
+                .await
+                .map_err(|e| format!("Failed to create RabbitMQ connection: {}", e))?;
         let channel = connection.create_channel().await.map_err(|e| {
             // Optionally log or transform the error
             Box::<dyn Error>::from(format!("Failed to create RabbitMQ Channel: {}", e))

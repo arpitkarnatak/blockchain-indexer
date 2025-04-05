@@ -24,9 +24,7 @@ sol!(
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    //
-    dotenv()?;
-    let config = Config::init_from_env()?;
+    dotenv().map_err(|err| format!("Environment variable initialization failed. {:?}", err))?;
     // Open the ABI file safely
     let abi_file = File::open("./abi.json")?;
 
