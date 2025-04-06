@@ -25,7 +25,7 @@ https://github.com/user-attachments/assets/1f390a5a-2d8e-4960-8f3f-6cf47ffc4705
 ```
 RPC_URL_WS=<WEBSOCKET_RPC_URL>
 RPC_URL_HTTP=<HTTP_RPC_URL>
-DATABASE_URL=postgres://username:password@localhost/postgres
+DATABASE_URL=MONGODB_CONNECTION_STRING
 ```
 3. Start the indexer wth the command `cargo run`
 4. Head to `/consumer` and start the consumer with `npm run start` (`npm install` first to get the dependencies)
