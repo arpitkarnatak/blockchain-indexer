@@ -27,10 +27,10 @@ impl MessageQueue {
             Connection::connect(&CONFIG.message_queue_url, ConnectionProperties::default())
                 .await
                 .map_err(|e| format!("Failed to create RabbitMQ connection: {}", e))?;
-        let channel = connection.create_channel().await.map_err(|e| {
-            // Optionally log or transform the error
-            Box::<dyn Error>::from(format!("Failed to create RabbitMQ Channel: {}", e))
-        })?;
+        let channel = connection
+            .create_channel()
+            .await
+            .map_err(|e| format!("Failed to create RabbitMQ Channel: {}", e))?;
 
         channel
             .queue_declare(
@@ -44,7 +44,8 @@ impl MessageQueue {
                 },
                 FieldTable::default(),
             )
-            .await?;
+            .await
+            .map_err(|err| format!("Failed to declare queue: {:?}", err))?;
 
         Ok(MessageQueue {
             channel,

@@ -37,6 +37,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         abi_file,
     )?;
 
+    indexer.event_parser().await?;
     // let consumer_handle = tokio::spawn(async {
     //     let eth_queue = MessageQueue::new("eth_events").await.unwrap();
     //     println!("Consumer started");
@@ -44,22 +45,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // });
 
     // Spawn a task for the event parser
-    let parser_handle = tokio::spawn(async move {
-        indexer.event_parser().await.unwrap();
-    });
+    // let parser_handle = tokio::spawn(async move {
+    //     indexer.event_parser().await.unwrap();
+    // });
 
     // Wait for both tasks to complete (which they won't since they run indefinitely)
-    tokio::select! {
-        // res = consumer_handle => {
-        //     if let Err(e) = res {
-        //         eprintln!("Consumer task failed: {}", e);
-        //     }
-        // }
-        res = parser_handle => {
-            if let Err(e) = res {
-                eprintln!("Parser task failed: {}", e);
-            }
-        }
-    }
+    // tokio::select! {
+    // res = consumer_handle => {
+    //     if let Err(e) = res {
+    //         eprintln!("Consumer task failed: {}", e);
+    //     }
+    // }
+    // res = parser_handle => {
+    //     if let Err(e) = res {
+    //         eprintln!("Parser task failed: {}", e);
+    //     }
+    // }
+    // }
     Ok(())
 }

@@ -11,7 +11,7 @@ use std::str::FromStr;
 
 use crate::config::{CONFIG, Config};
 use crate::message_queue::MessageQueue;
-use crate::{CONTRACT_ADDRESS_USDT, USDT_CONTRACT};
+use crate::{USDT_CONTRACT};
 
 #[derive(Debug)] // Implement Debug to print Indexer
 pub struct Indexer {
@@ -57,7 +57,10 @@ impl Indexer {
         let mut jump = 1;
         let mut end_block = start_block + jump;
 
-        let http_provider = ProviderBuilder::new().on_http(Url::parse(&CONFIG.rpc_url_http)?);
+        let http_provider = ProviderBuilder::new().on_http(
+            Url::parse(&CONFIG.rpc_url_http)
+                .map_err(|err| format!("Error Configuring HTTP RPC {:?}", err))?,
+        );
 
         while start_block <= self.indexer_created_block_number {
             // Double the gap every iteration, once it fails, return to gap of 1
@@ -106,7 +109,7 @@ impl Indexer {
             .map_err(|err| format!("Failed to instantiate message queue {:?}", err))?;
 
         let filter = Filter::new()
-            .address(Address::from_str(CONTRACT_ADDRESS_USDT)?)
+            .address(Address::from_str(&self.contract_address)?)
             .event(&self.event_signature);
 
         let subscription = provider
@@ -131,7 +134,14 @@ impl Indexer {
             }
             eth_queue
                 .publish_message(&serde_json::to_string(&event_log)?)
-                .await?;
+                .await
+                .map_err(|err| {
+                    format!(
+                        "Failed to publish the message: {:?} due to error {:?}",
+                        &serde_json::to_string(&event_log),
+                        err
+                    )
+                })?;
         }
 
         Ok(())
