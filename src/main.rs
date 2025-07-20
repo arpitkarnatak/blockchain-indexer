@@ -3,13 +3,12 @@ mod indexer;
 mod message_queue;
 
 use alloy::sol;
-use config::Config;
 use dotenv::dotenv;
-use envconfig::Envconfig;
 use indexer::Indexer;
-use message_queue::MessageQueue;
 use std::error::Error;
 use std::fs::File;
+use std::sync::Arc;
+use tokio::task::JoinHandle;
 
 // Codegen from ABI file to interact with the contract.
 
@@ -28,39 +27,39 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Open the ABI file safely
     let abi_file = File::open("./abi.json")?;
 
-    let indexer = Indexer::new(
+    let indexer = Arc::new(Indexer::new(
         CONTRACT_ADDRESS_USDT, // USDT Address
         22169475,
-        22169477,
+        22179475,
         "Transfer".to_owned(),
         "Transfer(address,address,uint256)".to_owned(),
         abi_file,
-    )?;
+    )?);
+    let indexer_clone_1 = indexer.clone();
+    let indexer_clone_2 = indexer.clone();
 
-    indexer.event_parser().await?;
-    // let consumer_handle = tokio::spawn(async {
-    //     let eth_queue = MessageQueue::new("eth_events").await.unwrap();
-    //     println!("Consumer started");
-    //     eth_queue.consume_message().await.unwrap();
-    // });
+    let handle_event_parsing: JoinHandle<()> = tokio::spawn(async move {
+        match indexer_clone_1.event_parser().await {
+            Ok(_) => {
+                println!("Done")
+            }
+            Err(e) => {
+                eprintln!("Error {:?}", e);
+            }
+        };
+    });
 
-    // Spawn a task for the event parser
-    // let parser_handle = tokio::spawn(async move {
-    //     indexer.event_parser().await.unwrap();
-    // });
-
-    // Wait for both tasks to complete (which they won't since they run indefinitely)
-    // tokio::select! {
-    // res = consumer_handle => {
-    //     if let Err(e) = res {
-    //         eprintln!("Consumer task failed: {}", e);
-    //     }
-    // }
-    // res = parser_handle => {
-    //     if let Err(e) = res {
-    //         eprintln!("Parser task failed: {}", e);
-    //     }
-    // }
-    // }
+    let backfilling = tokio::spawn(async move {
+        match indexer_clone_2.backfill_database().await {
+            Ok(_) => {
+                println!("Completed Backfill")
+            }
+            Err(e) => {
+                eprintln!("Error {:?}", e);
+            }
+        };
+    });
+    handle_event_parsing.await?;
+    backfilling.await?;
     Ok(())
 }

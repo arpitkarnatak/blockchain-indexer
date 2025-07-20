@@ -1,6 +1,6 @@
 use alloy::primitives::{Address, BlockNumber};
 use alloy::providers::{Provider, WsConnect};
-use alloy::rpc::types::Filter;
+use alloy::rpc::types::{Filter};
 use alloy::{providers::ProviderBuilder, transports::http::reqwest::Url};
 use futures_util::StreamExt;
 use serde_json::Value as JSONValue;
@@ -9,9 +9,9 @@ use std::fs::File;
 use std::io::Read;
 use std::str::FromStr;
 
-use crate::config::{CONFIG, Config};
+use crate::USDT_CONTRACT::{self, Transfer};
+use crate::config::{CONFIG};
 use crate::message_queue::MessageQueue;
-use crate::{USDT_CONTRACT};
 
 #[derive(Debug)] // Implement Debug to print Indexer
 pub struct Indexer {
@@ -53,6 +53,9 @@ impl Indexer {
     // Get the transactions from the contract creation upto the block number from when the indexer was created
     // The block after indexer_created_block_number would be picked up in real time as they get appended to blockchain
     pub async fn backfill_database(&self) -> Result<(), Box<dyn Error>> {
+        let eth_queue = MessageQueue::new("eth_events")
+            .await
+            .map_err(|err| format!("Failed to instantiate message queue {:?}", err))?;
         let mut start_block = self.contract_creation_block_number;
         let mut jump = 1;
         let mut end_block = start_block + jump;
@@ -71,24 +74,39 @@ impl Indexer {
                 .event(&self.event_signature);
             println!("From blocks {} to {}", start_block, end_block);
 
-            let logs = http_provider
-                .get_logs(&filter)
-                .await
-                .map_err(|err| format!("Error while getting logs {:?}", err))?;
+            let logs = match http_provider.get_logs(&filter).await {
+                Ok(logs) => logs,
+                Err(e) => {
+                    println!("Error occured {:?}", e);
 
-            logs.iter().for_each(|log| {
+                    // Set the jump back to 1, since there are cases of overflow
+                    jump = 1;
+                    break;
+                }
+            };
+
+            for log in logs.iter() {
                 println!("[HTTP] ======= Log incoming ==========");
-                let event_object = log
+                let event_log: Transfer = log
                     .log_decode::<USDT_CONTRACT::Transfer>()
-                    .map_err(|err| format!("Error decoding logs {:?}", err))
-                    .unwrap()
+                    .map_err(|err| format!("Error decoding logs {:?}", err))?
                     .inner
                     .data;
-                println!("[HTTP] {:?}", &event_object);
-            });
+                println!("[HTTP] {:?}", &event_log);
+                eth_queue
+                    .publish_message(&serde_json::to_string(&event_log)?)
+                    .await
+                    .map_err(|err| {
+                        format!(
+                            "Failed to publish the message: {:?} due to error {:?}",
+                            &serde_json::to_string(&event_log),
+                            err
+                        )
+                    })?;
+            }
             jump *= 2;
             start_block = end_block;
-            end_block = end_block + jump;
+            end_block += jump;
         }
         Ok(())
     }
